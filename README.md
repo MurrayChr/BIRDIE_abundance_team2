@@ -254,7 +254,7 @@ source("code/ppl_fit_ssm_model_edited.R")
 fit <- ppl_fit_ssm_model_edited(model_data, "code/cwac_ssm_two_season_mean_rev_jump.R")
 #> `summarise()` has grouped output by 'site_id', 'year'. You can override using
 #> the `.groups` argument.
-#> [1] "Fitting state-space JAGS model at 2025-07-21 09:31:12.291508"
+#> [1] "Fitting state-space JAGS model at 2025-07-21 09:47:51.436724"
 #> 
 #> Processing function input....... 
 #> 
@@ -264,7 +264,7 @@ fit <- ppl_fit_ssm_model_edited(model_data, "code/cwac_ssm_two_season_mean_rev_j
 #> 
 #> Parallel processing completed.
 #> 
-#> MCMC took 0.221 minutes.
+#> MCMC took 0.211 minutes.
 ```
 
 ``` r
@@ -316,7 +316,7 @@ fit_covars <- ppl_fit_ssm_model_edited_covars(model_data,
                                        "code/cwac_ssm_two_season_mean_rev_jump_covars.R")
 #> `summarise()` has grouped output by 'site_id', 'year'. You can override using
 #> the `.groups` argument.
-#> [1] "Fitting state-space JAGS model at 2025-07-21 09:31:28.791764"
+#> [1] "Fitting state-space JAGS model at 2025-07-21 09:48:05.889106"
 #> 
 #> Processing function input....... 
 #> 
