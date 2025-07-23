@@ -5,6 +5,7 @@
 # devtools::install_github("AfricaBirdData/ABAP")
 # devtools::install_github("mrke/NicheMapR")
 # install.packages("futile.logger")
+# install.packages("jagsUI")
 
 # Load packages
 library(BIRDIE)
@@ -15,6 +16,7 @@ library(ggplot2)
 library(sf)
 library(futile.logger)
 library(NicheMapR)
+library(jagsUI)
 
 #### Step 2: Explore BIRDIE data ####
 
@@ -34,7 +36,9 @@ sp_ID_dat
 sp_code = sp_ID_dat$SppRef
 
 # Get list of all CWAC sites in the Western Cape
-sites <- listCwacSites(.region_type = "province", .region = "Western Cape")
+sites <- listCwacSites(.region_type = "province", .region = "Western Cape") %>%
+  mutate(X = as.numeric(X),
+         Y = as.numeric(Y))
 message(paste("AfricaBirdData contains data from ", nrow(sites), "sites."))
 
 # Select data for the Eerste River Estuary only
@@ -42,13 +46,62 @@ eerste <- sites %>%
   filter(LocationName == "Eerste River Estuary")
 eerste
 
-# Download all counts for this site
-bird_counts <- getCwacSiteCounts(eerste$LocationCode)
+# Calculate distance from Eerste River Estuary
+sites$degree_dist <- sqrt((sites$X - eerste$X)^2 + (sites$Y - eerste$Y)^2)
+
+training_sites <- sites %>%
+  arrange(degree_dist) %>%
+  slice(1:6) %>%
+  pull(LocationName)
+
+training_codes <- sites %>%
+  filter(LocationName %in% training_sites,
+         LocationCode != "34051850") %>%
+  arrange(degree_dist) %>%
+  pull(LocationCode)
+
+farcast_sites <- sites %>%
+  arrange(degree_dist) %>%
+  slice(7:10) %>%
+  pull(LocationName)
+
+farcast_codes <- sites %>%
+  filter(LocationName %in% farcast_sites) %>%
+  arrange(degree_dist) %>%
+  pull(LocationCode)
+
+
+# Download all counts for training sites
+getCwacModelData_sp <- function(
+    site_code,
+    genus,
+    specific_epithet){
+  raw_dat <- getCwacSiteCounts(site_code) %>%
+    filter(Genus == genus & Species == sp_epithet)
+  out <- create_data_ssm_single_site(raw_dat)
+  return(out)
+}
+
+model_dat_training <- 
+  do.call(bind_rows, lapply(training_codes, 
+                            getCwacModelData_sp,
+                            genus = genus,
+                            specific_epithet = sp_epithet)) 
+sum(!is.na(model_dat_training$count))
+
+model_dat_farcast <- 
+  do.call(bind_rows, lapply(farcast_codes, 
+                            getCwacModelData_sp,
+                            genus = genus,
+                            specific_epithet = sp_epithet)) 
+sum(!is.na(model_dat_farcast$count))
+
+
 
 # Select data for species of interest only
-sp_counts <- bird_counts %>% filter(Genus == genus & Species == sp_epithet)
-summary(sp_counts$TotalCount)
-sd(sp_counts$TotalCount)
+# sp_counts <- bird_counts %>% filter(Genus == genus & Species == sp_epithet)
+# summary(sp_counts$TotalCount)
+# sd(sp_counts$TotalCount)
 
 #### Step 3: Plot data ####
 # Visualise raw counts for species of interest
@@ -79,3 +132,7 @@ qqline(log(sp_counts$TotalCount))
 
 shapiro.test(log(sp_counts$TotalCount))
 
+#### Step 4: Prep data for modeling ####
+# Prepare data for modelling
+source("code/create_data_ssm_single_site.R") #Modified code from BIRDIE package
+model_data <- create_data_ssm_single_site(sp_counts)
