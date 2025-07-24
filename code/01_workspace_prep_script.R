@@ -18,6 +18,8 @@ library(futile.logger)
 library(NicheMapR)
 library(jagsUI)
 
+source("code/helper_funs.R")
+
 #### Step 2: Explore BIRDIE data ####
 
 # Get list of all CWAC species
@@ -49,64 +51,45 @@ eerste
 # Calculate distance from Eerste River Estuary
 sites$degree_dist <- sqrt((sites$X - eerste$X)^2 + (sites$Y - eerste$Y)^2)
 
+#### Step 3: Choose sites for analysis ####
 training_sites <- sites %>%
   arrange(degree_dist) %>%
   slice(1:6) %>%
-  pull(LocationName)
-
-training_codes <- sites %>%
-  filter(LocationName %in% training_sites,
-         LocationCode != "34051850") %>%
-  arrange(degree_dist) %>%
-  pull(LocationCode)
+  dplyr::select(LocationName, LocationCode) %>%
+  filter(LocationCode != "34051850",
+         LocationCode != "34051849")
 
 farcast_sites <- sites %>%
   arrange(degree_dist) %>%
   slice(7:10) %>%
-  pull(LocationName)
-
-farcast_codes <- sites %>%
-  filter(LocationName %in% farcast_sites) %>%
-  arrange(degree_dist) %>%
-  pull(LocationCode)
+  dplyr::select(LocationName, LocationCode)
 
 
-# Download all counts for training sites
-getCwacModelData_sp <- function(
-    site_code,
-    genus,
-    specific_epithet){
-  raw_dat <- getCwacSiteCounts(site_code) %>%
-    filter(Genus == genus & Species == sp_epithet)
-  out <- create_data_ssm_single_site(raw_dat)
-  return(out)
-}
+
+#### Step 4: Prep data for modeling ####
+# load and prep data for model inputs
 
 model_dat_training <- 
-  do.call(bind_rows, lapply(training_codes, 
+  do.call(bind_rows, lapply(training_sites$LocationCode, 
                             getCwacModelData_sp,
                             genus = genus,
-                            specific_epithet = sp_epithet)) 
+                            specific_epithet = sp_epithet)) %>%
+  left_join(training_sites, by = "LocationCode")
 sum(!is.na(model_dat_training$count))
 
 model_dat_farcast <- 
-  do.call(bind_rows, lapply(farcast_codes, 
+  do.call(bind_rows, lapply(farcast_sites$LocationCode, 
                             getCwacModelData_sp,
                             genus = genus,
-                            specific_epithet = sp_epithet)) 
+                            specific_epithet = sp_epithet)) %>%
+  left_join(farcast_sites, by = "LocationCode")
 sum(!is.na(model_dat_farcast$count))
 
 
-
-# Select data for species of interest only
-# sp_counts <- bird_counts %>% filter(Genus == genus & Species == sp_epithet)
-# summary(sp_counts$TotalCount)
-# sd(sp_counts$TotalCount)
-
-#### Step 3: Plot data ####
+#### Step 5: Plot data ####
 # Visualise raw counts for species of interest
-sp_counts %>%
-  ggplot(aes(x = StartDate, y = Count)) +
+model_dat_training %>%
+  ggplot(aes(x = StartDate, y = count, color = LocationName)) +
   geom_line() +
   geom_point() +
   # labs(title = "Hourly Data",
@@ -132,7 +115,6 @@ qqline(log(sp_counts$TotalCount))
 
 shapiro.test(log(sp_counts$TotalCount))
 
-#### Step 4: Prep data for modeling ####
-# Prepare data for modelling
+
 source("code/create_data_ssm_single_site.R") #Modified code from BIRDIE package
 model_data <- create_data_ssm_single_site(sp_counts)
