@@ -54,8 +54,20 @@ bird_counts <- getCwacSiteCounts(site_code) %>%
          date = lubridate::ymd(StartDate)) %>%
   filter(canonical == sp)
 
+bird_counts$log_count <- log(bird_counts$Count)
+
 ggplot(bird_counts, aes(x = date, y = Count)) +
-  geom_line()
+  geom_line() +
+  labs(title = "Counts of Hartlaub's Gull at Paarl Bird Sanctuary",
+       x = "Time",
+       y = "Count") +
+  theme_minimal()
+ggplot(bird_counts, aes(x = date, y = log_count)) +
+  geom_line() +
+  labs(title = "Counts of Hartlaub's Gull at Paarl Bird Sanctuary",
+       x = "Time",
+       y = "Log(Count)") +
+  theme_minimal()
 
 hist(log10(bird_counts$Count))
 
@@ -260,40 +272,51 @@ future_dat <- update_tbl %>%
          mu_fore,
          tau_fore,
          mu_updt,
-         tau_updt) %>%
-  mutate(x_ci_ll_updt = exp(log(y) - 1.96*(1/sqrt(tau_updt))),
-         x_ci_ul_updt)= exp(log(y) + 1.96*(1/sqrt(tau_updt))),
-         x_
-
+         tau_updt)
 
 future_dat$mu_fore[1] <- mean(out[,"x[297]"])
-future_dat$tau_fore[1] <- as.numeric(NA)
+future_dat$tau_fore[1] <- 1/var(out[,"x[297]"])
+
+future_dat <- future_dat %>%
+  # add last pre-forecast observation
+  add_row(
+    date = count_dat$date[295],
+    t = 0,
+    obs_count = count_dat$Count[295],
+    mu_fore = mean(out[,297]),
+    tau_fore = 1/var(out[,"x[297]"])*add_tau_bar / (1/var(out[,"x[297]"]) + add_tau_bar),
+    mu_updt = mean(out[,297]),
+    tau_updt = 1/var(out[,"x[297]"])) %>%
+  arrange(t) %>%
+  mutate(log_y = log(obs_count),
+         x_ll_updt = log_y - 1.96*(1/sqrt(tau_updt)),
+         x_ul_updt = log_y + 1.96*(1/sqrt(tau_updt)),
+         x_ll_fore = log_y - 1.96*(1/sqrt(tau_fore)),
+         x_ul_fore = log_y + 1.96*(1/sqrt(tau_fore))) 
+
 #### Plot forecast ####
 
 # Plot just late data
 
 ggplot(future_dat,
        aes(x = date,
-           y = y)) +
+           y = log_y)) +
   geom_point() +
-  geom_errorbar()
-  geom_ribbon() +
+  scale_y_continuous(limits = c(0, log(2000)),
+                     breaks = log(c(1,10,100, 1000)),
+                     labels = function(x) round(exp(x), 0),
+                     name = "Count") +
+  #labs(title = "Incorrect Forecasted CIs with observations \nand observation uncertainty.",
+   #    x = "Time") +
+  xlab("Time") +
+  geom_errorbar(aes(ymin = x_ll_updt,
+                    ymax = x_ul_updt)) +
+  geom_ribbon(aes(ymin = x_ll_fore,
+                  ymax = x_ul_fore),
+              alpha = 0.5) +
   theme_minimal()
 
-plot(count_dat$date,
-     ci[2,],
-     type='n',
-     ylim=c(1, max(bird_counts$Count, na.rm =T)),
-     xlim = c(ymd("2022-01-01", "2025-07-24")),
-     ylab="Count",
-     log='y',
-     xlab = "Time")
 
 
-ecoforecastR::ciEnvelope(count_dat$date,ci[1,],ci[3,],col=ecoforecastR::col.alpha("lightBlue",0.75))
-points(count_dat$date,count_dat$Count,pch="+",cex=0.5)
-abline(v = ymd("2024-01-01"), col = "red")
-points(bird_counts$date[296:302],
-       bird_counts$Count[296:302],
-       pch=19, 
-       col="red",)
+
+
